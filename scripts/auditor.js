@@ -171,12 +171,14 @@ function buildRow(doc, nonGmPlayers) {
 function collectRows() {
   const nonGmPlayers = game.users.filter(u => !u.isGM);
   const rows = [];
+  let docsScanned = 0;
 
   for (const [typeLabel, collectionKey] of Object.entries(COLLECTION_MAP)) {
     const collection = game.collections.get(collectionKey);
     if (!collection) continue;
 
     for (const doc of collection.contents) {
+      docsScanned++;
       const row = buildRow(doc, nonGmPlayers);
       if (row) {
         row.type = typeLabel;
@@ -189,6 +191,32 @@ function collectRows() {
     if (a.type !== b.type) return a.type.localeCompare(b.type);
     return a.name.localeCompare(b.name);
   });
+
+  console.log(`Visibility Auditor | Scan complete – ${nonGmPlayers.length} non-GM user(s), ${docsScanned} document(s) checked, ${rows.length} row(s) returned.`);
+
+  // Diagnostic: when the table is empty, dump ownership of all journals
+  // so we can see why nothing was flagged.
+  if (rows.length === 0 && docsScanned > 0) {
+    const journals = game.collections.get("journal")?.contents ?? [];
+    if (journals.length) {
+      console.group("Visibility Auditor | Diagnostic – Journal ownership details:");
+      for (const j of journals) {
+        const own = j.ownership ?? {};
+        const folderOwn = j.folder?.ownership ?? {};
+        const pageGrants = pagesOf(j).map(p => ({
+          name: p.name,
+          ownership: p.ownership ?? {},
+        }));
+        console.log(`${j.name} [${j.id}]`, {
+          docOwnership: own,
+          folderName: j.folder?.name ?? "(root)",
+          folderOwnership: folderOwn,
+          pages: pageGrants,
+        });
+      }
+      console.groupEnd();
+    }
+  }
 
   return rows;
 }
@@ -427,9 +455,12 @@ function addAuditHeaderControl(app, controls) {
   actions.visibilityAuditDialog = () => openAuditDialog();
 }
 
-function bindAuditControl(element) {
+function bindAuditControl(html) {
   if (!game.user.isGM) return;
-  if (!(element instanceof HTMLElement)) return;
+
+  // v13/v14 render hooks pass a raw HTMLElement; v12 passes jQuery.
+  const element = (html instanceof HTMLElement) ? html : html?.[0];
+  if (!element || !(element instanceof HTMLElement)) return;
 
   const control = element.querySelector(".va-audit-control");
   if (!control || control.dataset.vaBound) return;
@@ -484,7 +515,9 @@ Hooks.once("init", () => {
   if (usesHeaderControlHooks) {
     for (const cls of AUDIT_DIRECTORY_CLASSES) {
       Hooks.on(`getHeaderControls${cls}`, addAuditHeaderControl);
-      Hooks.on(`render${cls}`, (app, element) => bindAuditControl(element));
+      // v13/v14 ApplicationV2 render hooks pass (app, options, html),
+      // not (app, html) as in the legacy renderSidebarTab hook.
+      Hooks.on(`render${cls}`, (app, options, html) => bindAuditControl(html));
     }
   } else {
     Hooks.on("renderSidebarTab", addAuditButton);
