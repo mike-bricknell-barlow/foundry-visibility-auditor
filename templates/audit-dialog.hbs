@@ -1,0 +1,68 @@
+<div class="visibility-auditor">
+  <div class="va-toolbar">
+    <input type="search" class="va-search" placeholder="Filter by name..." />
+    <select class="va-type-filter">
+      <option value="all">All</option>
+      <option value="Actor">Actor</option>
+      <option value="JournalEntry">Journal</option>
+      <option value="Item">Item</option>
+      <option value="Scene">Scene</option>
+    </select>
+  </div>
+
+  <div class="va-table-wrapper">
+    <table class="va-table">
+      <thead>
+        <tr>
+          <th class="va-col-type">Type</th>
+          <th class="va-col-name">Name</th>
+          <th class="va-col-default">Default (All Players)</th>
+          <th class="va-col-players">Specific Players</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#if rows.length}}
+          {{#each rows as |row|}}
+            <tr class="va-row" data-doc-id="{{row.id}}">
+              <td class="va-cell-type">{{row.type}}</td>
+              <td class="va-cell-name">
+                <a class="va-open-sheet" data-doc-id="{{row.id}}" title="Open {{row.name}}">
+                  {{row.name}}
+                </a>
+              </td>
+              <td class="va-cell-default">
+                {{#if row.defaultLevel}}
+                  <span class="va-pill va-level-{{row.defaultSlug}}">{{row.defaultLevel}}</span>
+                {{else}}
+                  <span class="va-muted">&mdash;</span>
+                {{/if}}
+              </td>
+              <td class="va-cell-players">
+                {{#if row.players.length}}
+                  {{#each row.players as |player|}}
+                    <span class="va-player-pill" style="--player-color: {{player.color}}">
+                      <span class="va-player-dot" style="background: {{player.color}}"></span>
+                      {{player.name}}
+                      <span class="va-pill va-level-{{player.levelSlug}}">{{player.level}}</span>
+                    </span>
+                  {{/each}}
+                {{else}}
+                  <span class="va-muted">&mdash;</span>
+                {{/if}}
+              </td>
+            </tr>
+          {{/each}}
+        {{else}}
+          <tr class="va-empty">
+            <td colspan="4">
+              <div class="va-empty-state">
+                <i class="fas fa-check-circle"></i>
+                <p>No documents are currently visible to non-GM players.</p>
+              </div>
+            </td>
+          </tr>
+        {{/if}}
+      </tbody>
+    </table>
+  </div>
+</div>

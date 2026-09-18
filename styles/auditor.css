@@ -1,0 +1,222 @@
+.visibility-auditor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: "Signica", "Segoe UI", sans-serif;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────── */
+
+.va-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.va-toolbar .va-search {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  color: #ccc;
+  font-size: 13px;
+}
+
+.va-toolbar .va-search::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.va-toolbar .va-type-filter {
+  padding: 4px 8px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  color: #ccc;
+  font-size: 13px;
+  min-width: 100px;
+}
+
+/* ── Table wrapper & scrolling ────────────────────────────── */
+
+.va-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.va-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.va-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.va-table thead th {
+  background: #1a1a2e;
+  color: #aaa;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Column widths ────────────────────────────────────────── */
+
+.va-col-type    { width: 80px; }
+.va-col-name    { width: auto; }
+.va-col-default { width: 120px; }
+.va-col-players { width: 280px; }
+
+/* ── Rows ─────────────────────────────────────────────────── */
+
+.va-table tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.1s;
+}
+
+.va-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.va-table td {
+  padding: 6px 10px;
+  vertical-align: middle;
+  color: #ccc;
+}
+
+/* ── Document name link ───────────────────────────────────── */
+
+.va-cell-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.va-open-sheet {
+  color: #b5d0ff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.va-open-sheet:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* ── Default cell ─────────────────────────────────────────── */
+
+.va-cell-default {
+  text-align: center;
+}
+
+.va-cell-players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── Permission pills ─────────────────────────────────────── */
+
+.va-pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.va-level-owner {
+  background: rgba(0, 170, 90, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(0, 170, 90, 0.35);
+}
+
+.va-level-observer {
+  background: rgba(56, 132, 255, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(56, 132, 255, 0.35);
+}
+
+.va-level-limited {
+  background: rgba(234, 160, 30, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(234, 160, 30, 0.35);
+}
+
+/* ── Player pills ─────────────────────────────────────────── */
+
+.va-player-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  color: var(--player-color, #ccc);
+  white-space: nowrap;
+}
+
+.va-player-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Muted / empty ────────────────────────────────────────── */
+
+.va-muted {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.va-empty {
+  background: transparent !important;
+}
+
+.va-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.va-empty-state i {
+  font-size: 28px;
+  margin-bottom: 10px;
+  display: block;
+  color: #4ade80;
+}
+
+.va-empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* ── Dialog sizing override (when rendered via Application) ── */
+
+#visibility-auditor-dialog .window-content {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#visibility-auditor-dialog .visibility-auditor {
+  height: 100%;
+}
