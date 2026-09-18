@@ -9,7 +9,7 @@
   "download": "",
   "compatibility": {
     "minimum": 12,
-    "verified": 13
+    "verified": 14
   },
   "esmodules": ["scripts/auditor.js"],
   "styles": ["styles/auditor.css"],
