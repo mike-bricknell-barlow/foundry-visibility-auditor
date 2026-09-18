@@ -209,7 +209,8 @@
 
 /* ── Dialog sizing override (when rendered via Application) ── */
 
-#visibility-auditor-dialog .window-content {
+#visibility-auditor-dialog .window-content,
+.visibility-auditor-app .window-content {
   padding: 0;
   overflow: hidden;
   display: flex;
@@ -217,6 +218,42 @@
   height: 100%;
 }
 
-#visibility-auditor-dialog .visibility-auditor {
+#visibility-auditor-dialog .visibility-auditor,
+.visibility-auditor-app .visibility-auditor {
   height: 100%;
+  min-height: 0;
+}
+
+/* ── Sidebar directory header button (v12 / early v13) ────────── */
+
+.va-audit-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin-left: 4px;
+  padding: 0;
+  line-height: 1;
+  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.va-audit-btn:hover,
+.va-audit-btn:focus {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 6px rgba(140, 180, 255, 0.35);
+}
+
+/* ── Sidebar header control (v13/v14) ─────────────────────────── */
+
+.va-audit-control {
+  --icon-fill-color: #ccc;
+}
+
+.va-audit-control:hover,
+.va-audit-control:focus {
+  --icon-fill-color: #fff;
 }
