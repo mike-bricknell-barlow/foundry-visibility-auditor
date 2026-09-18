@@ -9,6 +9,12 @@
 
 /* ──────────────────────────────────────────────────────────────
    CONSTANTS
+   ------------------------------------------------------------------
+   NOTE: nothing at module top-level may touch `game`, `ui` or the
+   `foundry.applications` namespaces – those are not guaranteed to be
+   populated yet when an ES module is first evaluated in v14. All
+   version detection and Application construction is deferred to
+   runtime (see getAuditAppClass()).
    ────────────────────────────────────────────────────────────── */
 
 const OWNERSHIP_LEVELS = [
@@ -82,20 +88,95 @@ function buildRow(doc, nonGmPlayers) {
   };
 }
 
+/** Gather + sort every document shared with at least one non-GM user. */
+function collectRows() {
+  const nonGmPlayers = game.users.filter(u => !u.isGM);
+  const rows = [];
+
+  for (const [typeLabel, collectionKey] of Object.entries(COLLECTION_MAP)) {
+    const collection = game.collections.get(collectionKey);
+    if (!collection) continue;
+
+    for (const doc of collection.contents) {
+      const row = buildRow(doc, nonGmPlayers);
+      if (row) {
+        row.type = typeLabel;
+        rows.push(row);
+      }
+    }
+  }
+
+  rows.sort((a, b) => {
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    return a.name.localeCompare(b.name);
+  });
+
+  return rows;
+}
+
+/** Open the sheet for a document referenced by one of the audit rows. */
+function openDocumentSheet(docId) {
+  for (const collectionKey of Object.values(COLLECTION_MAP)) {
+    const collection = game.collections.get(collectionKey);
+    if (!collection) continue;
+
+    const doc = collection.get(docId);
+    if (doc) {
+      doc.sheet?.render(true);
+      return;
+    }
+  }
+}
+
+/** Client-side row filtering shared by both Application versions. */
+function applyClientFilters(element, searchTerm, typeFilter) {
+  const tbody = element?.querySelector(".va-table tbody");
+  if (!tbody) return;
+
+  const term = searchTerm.toLowerCase();
+
+  for (const row of tbody.querySelectorAll(".va-row")) {
+    const name    = row.querySelector(".va-cell-name")?.textContent?.toLowerCase() ?? "";
+    const rowType = row.querySelector(".va-cell-type")?.textContent?.trim() ?? "";
+
+    const matchesSearch = !term || name.includes(term);
+    const matchesType   = typeFilter === "all" || rowType === typeFilter;
+
+    row.style.display = (matchesSearch && matchesType) ? "" : "none";
+  }
+}
+
+/** Bind the toolbar filter controls on the given app element. */
+function bindFilterControls(element, state) {
+  const searchEl = element?.querySelector(".va-search");
+  const typeEl   = element?.querySelector(".va-type-filter");
+
+  if (searchEl) {
+    searchEl.value = state.searchTerm;
+    searchEl.addEventListener("input", (e) => {
+      state.searchTerm = e.target.value;
+      applyClientFilters(element, state.searchTerm, state.typeFilter);
+    });
+  }
+
+  if (typeEl) {
+    typeEl.value = state.typeFilter;
+    typeEl.addEventListener("change", (e) => {
+      state.typeFilter = e.target.value;
+      applyClientFilters(element, state.searchTerm, state.typeFilter);
+    });
+  }
+}
+
 /* ──────────────────────────────────────────────────────────────
-   APPLICATION
+   APPLICATION – ApplicationV2 (v12 – v14)
    ------------------------------------------------------------------
-   The ApplicationV2 class layout differs between Foundry releases:
+   The AppV2 layout differs between releases:
      - v12:  foundry.applications.api.HandlebarsApplicationV2 and the
              top-level `template` option.
      - v13+: HandlebarsApplicationMixin(ApplicationV2) and static
              `PARTS` (the `template` option renders nothing).
-   A small factory builds the correct class for the running version.
    ────────────────────────────────────────────────────────────── */
-
-function isV13OrLater() {
-  return (game?.release?.generation ?? 0) >= 13;
-}
 
 function createVisibilityAuditorApp(AppBase, { usesParts }) {
   return class VisibilityAuditorApp extends AppBase {
@@ -122,114 +203,96 @@ function createVisibilityAuditorApp(AppBase, { usesParts }) {
 
     constructor() {
       super({});
-      this._searchTerm = "";
-      this._typeFilter = "all";
+      this.searchTerm = "";
+      this.typeFilter = "all";
     }
 
     /** Context data handed to the Handlebars template. */
     async _prepareContext() {
-      const nonGmPlayers = game.users.filter(u => !u.isGM);
-      const rows = [];
-
-      for (const [typeLabel, collectionKey] of Object.entries(COLLECTION_MAP)) {
-        const collection = game.collections.get(collectionKey);
-        if (!collection) continue;
-
-        for (const doc of collection.contents) {
-          const row = buildRow(doc, nonGmPlayers);
-          if (row) {
-            row.type = typeLabel;
-            rows.push(row);
-          }
-        }
-      }
-
-      // Sort by type, then name
-      rows.sort((a, b) => {
-        if (a.type !== b.type) return a.type.localeCompare(b.type);
-        return a.name.localeCompare(b.name);
-      });
-
-      return { rows };
+      return { rows: collectRows() };
     }
 
     /** After render – bind the live filter controls. */
     async _onRender(context, options) {
       await super._onRender(context, options);
-
-      const searchEl = this.element.querySelector(".va-search");
-      const typeEl   = this.element.querySelector(".va-type-filter");
-
-      if (searchEl) {
-        searchEl.value = this._searchTerm;
-        searchEl.addEventListener("input", (e) => {
-          this._searchTerm = e.target.value;
-          this._applyClientFilters();
-        });
-      }
-
-      if (typeEl) {
-        typeEl.value = this._typeFilter;
-        typeEl.addEventListener("change", (e) => {
-          this._typeFilter = e.target.value;
-          this._applyClientFilters();
-        });
-      }
-    }
-
-    /** Client-side row filtering (no re-render needed). */
-    _applyClientFilters() {
-      const tbody = this.element.querySelector(".va-table tbody");
-      if (!tbody) return;
-
-      const term = this._searchTerm.toLowerCase();
-      const type = this._typeFilter;
-
-      for (const row of tbody.querySelectorAll(".va-row")) {
-        const name    = row.querySelector(".va-cell-name")?.textContent?.toLowerCase() ?? "";
-        const rowType = row.querySelector(".va-cell-type")?.textContent?.trim() ?? "";
-
-        const matchesSearch = !term || name.includes(term);
-        const matchesType   = type === "all" || rowType === type;
-
-        row.style.display = (matchesSearch && matchesType) ? "" : "none";
-      }
+      bindFilterControls(this.element, this);
     }
 
     /** Action: open the sheet of the clicked document. */
     static async _onOpenSheet(event, target) {
-      const docId = target.dataset.docId;
-      if (!docId) return;
-
-      for (const collectionKey of Object.values(COLLECTION_MAP)) {
-        const collection = game.collections.get(collectionKey);
-        if (!collection) continue;
-
-        const doc = collection.get(docId);
-        if (doc) {
-          doc.sheet?.render(true);
-          return;
-        }
-      }
+      openDocumentSheet(target.dataset.docId);
     }
   };
 }
 
-// Build the application class for the running Foundry version.
-let VisibilityAuditorApp;
-if (isV13OrLater() && foundry.applications?.api?.HandlebarsApplicationMixin) {
-  const { HandlebarsApplicationMixin, ApplicationV2 } = foundry.applications.api;
-  VisibilityAuditorApp = createVisibilityAuditorApp(
-    HandlebarsApplicationMixin(ApplicationV2),
-    { usesParts: true },
-  );
-} else if (foundry.applications?.api?.HandlebarsApplicationV2) {
-  VisibilityAuditorApp = createVisibilityAuditorApp(
-    foundry.applications.api.HandlebarsApplicationV2,
-    { usesParts: false },
-  );
-} else {
-  throw new Error("Visibility Auditor | No compatible ApplicationV2 base class found.");
+/* ──────────────────────────────────────────────────────────────
+   APPLICATION – legacy Application fallback
+   ------------------------------------------------------------------
+   Insurance for any environment where ApplicationV2 is not exposed
+   when needed. Uses the long-lifespan (deprecation extends to v16)
+   legacy Application class so the module keeps working.
+   ────────────────────────────────────────────────────────────── */
+
+class VisibilityAuditorAppV1 extends Application {
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id:        TAG,
+      title:     "Visibility Auditor",
+      template:  TEMPLATE_PATH,
+      width:     820,
+      height:    600,
+      resizable: true,
+      classes:   ["visibility-auditor-app"],
+    });
+  }
+
+  getData() {
+    return { rows: collectRows() };
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    const element = html[0] ?? html;
+
+    const state = { searchTerm: "", typeFilter: "all" };
+    bindFilterControls(element, state);
+
+    element.querySelectorAll(".va-open-sheet").forEach(anchor => {
+      anchor.addEventListener("click", (event) => {
+        event.preventDefault();
+        openDocumentSheet(anchor.dataset.docId);
+      });
+    });
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   APPLIICATION CLASS SELECTION (deferred until first use)
+   ────────────────────────────────────────────────────────────── */
+
+let _AuditAppClass = null;
+
+function getAuditAppClass() {
+  if (_AuditAppClass) return _AuditAppClass;
+
+  const api = foundry.applications?.api ?? {};
+  const isV13 = (game?.release?.generation ?? 0) >= 13;
+
+  if (isV13 && api.HandlebarsApplicationMixin && api.ApplicationV2) {
+    _AuditAppClass = createVisibilityAuditorApp(
+      api.HandlebarsApplicationMixin(api.ApplicationV2),
+      { usesParts: true },
+    );
+  } else if (api.HandlebarsApplicationV2) {
+    _AuditAppClass = createVisibilityAuditorApp(api.HandlebarsApplicationV2, { usesParts: false });
+  } else if (typeof Application === "function") {
+    console.warn("Visibility Auditor | ApplicationV2 unavailable; falling back to the legacy Application class.");
+    _AuditAppClass = VisibilityAuditorAppV1;
+  } else {
+    throw new Error("Visibility Auditor | No compatible base application class found.");
+  }
+
+  return _AuditAppClass;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -240,8 +303,14 @@ let _dialog = null;
 
 function openAuditDialog() {
   if (!game.user.isGM) return;
-  if (!_dialog) _dialog = new VisibilityAuditorApp();
-  _dialog.render(true);
+
+  try {
+    if (!_dialog) _dialog = new (getAuditAppClass())();
+    _dialog.render(true);
+  } catch (error) {
+    console.error("Visibility Auditor | Failed to open the audit dialog:", error);
+    ui.notifications?.error?.("Visibility Auditor: could not open the audit dialog – see the console.");
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -265,10 +334,10 @@ function addAuditHeaderControl(app, controls) {
 
   if (!controls.some(c => c.class === "va-audit-control")) {
     controls.push({
-      class: "va-audit-control",
-      icon:  "fas fa-user-shield",
-      label: "Audit Permissions",
-      title: "Audit Permissions",
+      class:  "va-audit-control",
+      icon:   "fas fa-user-shield",
+      label:  "Audit Permissions",
+      title:  "Audit Permissions",
       action: "visibilityAuditDialog",
     });
   }
@@ -281,10 +350,9 @@ function addAuditHeaderControl(app, controls) {
 
 function bindAuditControl(element) {
   if (!game.user.isGM) return;
-  const root = element instanceof HTMLElement ? element : undefined;
-  if (!root) return;
+  if (!(element instanceof HTMLElement)) return;
 
-  const control = root.querySelector(".va-audit-control");
+  const control = element.querySelector(".va-audit-control");
   if (!control || control.dataset.vaBound) return;
 
   control.dataset.vaBound = "1";
@@ -325,6 +393,25 @@ function addAuditButton(app, html) {
    INITIALISATION
    ────────────────────────────────────────────────────────────── */
 
+Hooks.once("init", () => {
+  // Choose the directory-button mechanism for this Foundry version.
+  // (Deferred to `init` because `game.release` may not be populated
+  // when the module script is first evaluated.)
+  const release = game?.release ?? {};
+  const usesHeaderControlHooks =
+    release.generation >= 14
+    || (release.generation >= 13 && (Number.parseInt(`${release.build ?? 0}`, 10) >= 332));
+
+  if (usesHeaderControlHooks) {
+    for (const cls of AUDIT_DIRECTORY_CLASSES) {
+      Hooks.on(`getHeaderControls${cls}`, addAuditHeaderControl);
+      Hooks.on(`render${cls}`, (app, element) => bindAuditControl(element));
+    }
+  } else {
+    Hooks.on("renderSidebarTab", addAuditButton);
+  }
+});
+
 Hooks.once("ready", () => {
   // Expose the macro-callable API for every user; every entry point
   // internally enforces the Game Master-only restriction.
@@ -334,18 +421,3 @@ Hooks.once("ready", () => {
     console.log("Visibility Auditor | Module ready – API available at game.modules.get('visibility-auditor').api.openDialog()");
   }
 });
-
-// Register the appropriate directory button mechanism for this version.
-const release = game?.release ?? {};
-const usesHeaderControlHooks =
-  release.generation >= 14
-  || (release.generation >= 13 && (Number.parseInt(`${release.build ?? 0}`, 10) >= 332));
-
-if (usesHeaderControlHooks) {
-  for (const cls of AUDIT_DIRECTORY_CLASSES) {
-    Hooks.on(`getHeaderControls${cls}`, addAuditHeaderControl);
-    Hooks.on(`render${cls}`, (app, element) => bindAuditControl(element));
-  }
-} else {
-  Hooks.on("renderSidebarTab", addAuditButton);
-}
