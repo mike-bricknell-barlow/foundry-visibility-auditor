@@ -27,10 +27,10 @@ const OWNERSHIP_LEVELS = [
 const DOC_OWNERSHIP = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
 
 const COLLECTION_MAP = {
-  Actor:        "actors",
-  JournalEntry: "journal",
-  Item:         "items",
-  Scene:        "scenes",
+  Actor:        () => game.actors,
+  JournalEntry: () => game.journal,
+  Item:         () => game.items,
+  Scene:        () => game.scenes,
 };
 
 const TEMPLATE_PATH = "modules/visibility-auditor/templates/audit-dialog.hbs";
@@ -173,8 +173,8 @@ function collectRows() {
   const rows = [];
   let docsScanned = 0;
 
-  for (const [typeLabel, collectionKey] of Object.entries(COLLECTION_MAP)) {
-    const collection = game.collections.get(collectionKey);
+  for (const [typeLabel, getCollection] of Object.entries(COLLECTION_MAP)) {
+    const collection = getCollection();
     if (!collection) continue;
 
     for (const doc of collection.contents) {
@@ -197,7 +197,7 @@ function collectRows() {
   // Diagnostic: when the table is empty, dump ownership of all journals
   // so we can see why nothing was flagged.
   if (rows.length === 0 && docsScanned > 0) {
-    const journals = game.collections.get("journal")?.contents ?? [];
+    const journals = game.journal?.contents ?? [];
     if (journals.length) {
       console.group("Visibility Auditor | Diagnostic – Journal ownership details:");
       for (const j of journals) {
@@ -223,8 +223,8 @@ function collectRows() {
 
 /** Open the sheet for a document referenced by one of the audit rows. */
 function openDocumentSheet(docId) {
-  for (const collectionKey of Object.values(COLLECTION_MAP)) {
-    const collection = game.collections.get(collectionKey);
+  for (const getCollection of Object.values(COLLECTION_MAP)) {
+    const collection = getCollection();
     if (!collection) continue;
 
     const doc = collection.get(docId);
@@ -439,6 +439,8 @@ const AUDIT_DIRECTORY_CLASSES = [
 function addAuditHeaderControl(app, controls) {
   if (!game.user.isGM) return;
 
+  console.log("Visibility Auditor | getHeaderControls fired for", app.constructor.name, "- controls count:", controls.length);
+
   if (!controls.some(c => c.class === "va-audit-control")) {
     controls.push({
       class:  "va-audit-control",
@@ -447,6 +449,7 @@ function addAuditHeaderControl(app, controls) {
       title:  "Audit Permissions",
       action: "visibilityAuditDialog",
     });
+    console.log("Visibility Auditor | Injected audit control into", app.constructor.name);
   }
 
   // Belt-and-braces: make the action resolvable on the app instance,
@@ -513,6 +516,7 @@ Hooks.once("init", () => {
     || (release.generation >= 13 && (Number.parseInt(`${release.build ?? 0}`, 10) >= 332));
 
   if (usesHeaderControlHooks) {
+    console.log("Visibility Auditor | Using header-control hooks (v13.332+/v14)");
     for (const cls of AUDIT_DIRECTORY_CLASSES) {
       Hooks.on(`getHeaderControls${cls}`, addAuditHeaderControl);
       // v13/v14 ApplicationV2 render hooks pass (app, options, html),
@@ -520,6 +524,7 @@ Hooks.once("init", () => {
       Hooks.on(`render${cls}`, (app, options, html) => bindAuditControl(html));
     }
   } else {
+    console.log("Visibility Auditor | Using legacy renderSidebarTab hook (v12/early v13)");
     Hooks.on("renderSidebarTab", addAuditButton);
   }
 });
