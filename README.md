@@ -1,6 +1,6 @@
 # Visibility Auditor
 
-![Foundry VTT](https://img.shields.io/badge/Foundry_VTT-v12_%26_v13-blue)
+![Foundry VTT](https://img.shields.io/badge/Foundry_VTT-v12_through_v14-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 **Visibility Auditor** is a Foundry Virtual Tabletop module for Game Masters that surfaces every world document (Actors, Journal Entries, Items, and Scenes) currently visible or shared with non-GM players — before an accidental spoiler ruins the session.
@@ -29,7 +29,7 @@ Permission levels are color-coded: <span style="color:#4ade80"><b>Owner</b></spa
 
 ## Compatibility
 
-- Foundry VTT **v12** (minimum) through **v13** (verified)
+- Foundry VTT **v12** (minimum) through **v14** (verified)
 - System-agnostic — works with any game system
 
 ## Installation

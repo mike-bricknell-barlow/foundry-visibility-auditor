@@ -1,5 +1,5 @@
 /**
- * Visibility Auditor – Foundry VTT v12 / v13
+ * Visibility Auditor – Foundry VTT v12 through v14
  *
  * Scans all world documents and surfaces anything that is visible
  * to at least one non-GM user. Provides a searchable, filterable
@@ -50,7 +50,7 @@ function levelSlug(value) {
  */
 function buildRow(doc, nonGmPlayers) {
   const ownership = doc.ownership ?? {};
-  let defaultLevel = ownership.default ?? 0;
+  const defaultLevel = ownership.default ?? 0;
 
   const sharedPlayers = [];
 
@@ -86,7 +86,28 @@ function buildRow(doc, nonGmPlayers) {
 
 const TAG = "visibility-auditor-dialog";
 
-class VisibilityAuditorApp extends foundry.applications.api.HandlebarsApplicationV2 {
+/**
+ * Resolve the ApplicationV2 base class that this module must extend.
+ * The class path changed between Foundation releases:
+ *   - v12 / v13: foundry.applications.api.HandlebarsApplicationV2
+ *   - v14+:      HandlebarsApplicationV2 is removed; the same class is
+ *                produced by the HandlebarsApplicationMixin.
+ */
+function resolveAppBase() {
+  const api = foundry.applications?.api ?? {};
+  if (api.HandlebarsApplicationV2) return api.HandlebarsApplicationV2;
+
+  const { HandlebarsApplicationMixin, ApplicationV2 } = api;
+  if (typeof HandlebarsApplicationMixin === "function" && ApplicationV2) {
+    return HandlebarsApplicationMixin(ApplicationV2);
+  }
+
+  throw new Error("Visibility Auditor | No compatible ApplicationV2 base class found.");
+}
+
+const AppBase = resolveAppBase();
+
+class VisibilityAuditorApp extends AppBase {
   constructor() {
     super({
       id:       TAG,
@@ -216,9 +237,21 @@ class VisibilityAuditorApp extends foundry.applications.api.HandlebarsApplicatio
 function addAuditButton(app, html) {
   if (!game.user.isGM) return;
 
-  // Determine which directory types should get the button
-  const allowedTypes = ["Actor", "JournalEntry", "Item", "Scene"];
-  if (!allowedTypes.includes(app.tabName)) return;
+  // Show the audit button only in the four supported directories.
+  // Sidebar tabs are keyed by their tab name (e.g. "actors") but we
+  // also fall back to the app class name for forward-compatibility.
+  const AUDIT_TAB_NAMES = ["actors", "journal", "items", "scenes"];
+  const AUDIT_CLASS_NAMES = [
+    "ActorDirectory",
+    "JournalEntryDirectory",
+    "ItemDirectory",
+    "SceneDirectory",
+  ];
+
+  const isAuditTab = AUDIT_TAB_NAMES.includes(app.tabName)
+    || AUDIT_CLASS_NAMES.includes(app.constructor.name);
+
+  if (!isAuditTab) return;
 
   const button = document.createElement("button");
   button.className = "va-audit-btn";
@@ -246,15 +279,13 @@ function openAuditDialog() {
 }
 
 Hooks.once("ready", () => {
-  if (!game.user.isGM) return;
-
-  // Expose macro-callable API
+  // Expose the macro-callable API. Exposed for every user, but every
+  // entry point internally enforces the Game Master-only restriction.
   const mod = game.modules.get("visibility-auditor");
   if (mod) {
     mod.api = { openDialog: openAuditDialog };
+    console.log("Visibility Auditor | Module ready – API available at game.modules.get('visibility-auditor').api.openDialog()");
   }
-
-  console.log("Visibility Auditor | Module loaded – API available at game.modules.get('visibility-auditor').api.openDialog()");
 });
 
 Hooks.on("renderSidebarTab", addAuditButton);
