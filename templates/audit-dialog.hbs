@@ -29,6 +29,9 @@
                 <a class="va-open-sheet" data-action="openSheet" data-doc-id="{{row.id}}" title="Open {{row.name}}">
                   {{row.name}}
                 </a>
+                {{#if row.via}}
+                  <span class="va-meta" title="Shared via a parent folder or journal page, not this document's own permissions">via {{row.via}}</span>
+                {{/if}}
               </td>
               <td class="va-cell-default">
                 {{#if row.defaultLevel}}

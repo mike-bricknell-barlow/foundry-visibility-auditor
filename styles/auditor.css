@@ -115,6 +115,15 @@
   text-decoration: underline;
 }
 
+.va-meta {
+  margin-left: 6px;
+  font-size: 10px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
 /* ── Default cell ─────────────────────────────────────────── */
 
 .va-cell-default {

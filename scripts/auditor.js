@@ -24,6 +24,8 @@ const OWNERSHIP_LEVELS = [
   { value: 3, label: "Owner",         slug: "owner" },
 ];
 
+const DOC_OWNERSHIP = { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
+
 const COLLECTION_MAP = {
   Actor:        "actors",
   JournalEntry: "journal",
@@ -50,21 +52,90 @@ function levelSlug(value) {
 }
 
 /**
+ * Highest ownership level granted to a key across a document and its
+ * folder ancestry. Foundry keeps folder-level permissions separate
+ * from document-level ones, but a folder grant makes its contained
+ * documents visible too – so both must be considered.
+ *
+ * @param {Document} doc
+ * @param {string}   key  "default" for all players, or a user id.
+ * @returns {number}  Highest matching ownership level (0 = none).
+ */
+function effectiveOwnershipLevel(doc, key) {
+  let best = 0;
+  for (let d = doc; d; d = d.folder) {
+    const lvl = d.ownership?.[key] ?? 0;
+    if (lvl > best) {
+      best = lvl;
+      if (best >= DOC_OWNERSHIP.OWNER) break;
+    }
+  }
+  return best;
+}
+
+/** True when any ancestor folder grants view to all or some players. */
+function folderGrants(doc, playerIds) {
+  for (let d = doc.folder; d; d = d.folder) {
+    const o = d.ownership ?? {};
+    if ((o.default ?? 0) > 0) return true;
+    for (const id of playerIds) if ((o[id] ?? 0) > 0) return true;
+  }
+  return false;
+}
+
+/** The pages of a journal entry, returned as a plain array. */
+function pagesOf(journal) {
+  if (Array.isArray(journal.pages)) return journal.pages;
+  if (journal.pages?.contents) return journal.pages.contents;
+  if (journal.pages instanceof Map) return Array.from(journal.pages.values());
+  return [];
+}
+
+/** True when any page of a journal grants view to all or some players. */
+function pageGrants(journal, playerIds) {
+  for (const page of pagesOf(journal)) {
+    const o = page.ownership ?? {};
+    if ((o.default ?? 0) > 0) return true;
+    for (const id of playerIds) if ((o[id] ?? 0) > 0) return true;
+  }
+  return false;
+}
+
+/**
  * Determine whether a document is visible to at least one non-GM
  * player, and build the row data for the audit table.
+ *
+ * Visibility is evaluated across three independent sources:
+ *   1. the document's own ownership,
+ *   2. the ownership of any descendant folder,
+ *   3. for journals, the ownership of individual pages (v11+).
  *
  * @param {Document} doc
  * @param {User[]}   nonGmPlayers
  * @returns {Object|null}  Row object, or null when not shared.
  */
 function buildRow(doc, nonGmPlayers) {
-  const ownership = doc.ownership ?? {};
-  const defaultLevel = ownership.default ?? 0;
+  const playerIds  = nonGmPlayers.map(p => p.id);
+  const isJournal  = doc.documentName === "JournalEntry";
+  const pages      = isJournal ? pagesOf(doc) : [];
+  const own        = doc.ownership ?? {};
+
+  // All-players default: the doc's own entry plus folder inheritance,
+  // raised to Limited when any journal page is shared at all.
+  const hasPageGrant = isJournal && pageGrants(doc, playerIds);
+  const defaultLevel = Math.max(
+    effectiveOwnershipLevel(doc, "default"),
+    hasPageGrant ? DOC_OWNERSHIP.LIMITED : DOC_OWNERSHIP.NONE,
+  );
 
   const sharedPlayers = [];
-
   for (const player of nonGmPlayers) {
-    const lvl = ownership[player.id] ?? 0;
+    let lvl = effectiveOwnershipLevel(doc, player.id);
+    if (isJournal) {
+      for (const page of pages) {
+        lvl = Math.max(lvl, page.ownership?.[player.id] ?? 0, page.ownership?.default ?? 0);
+      }
+    }
     if (lvl > 0) {
       sharedPlayers.push({
         name:      player.name,
@@ -75,8 +146,15 @@ function buildRow(doc, nonGmPlayers) {
     }
   }
 
-  const isShared = defaultLevel > 0 || sharedPlayers.length > 0;
-  if (!isShared) return null;
+  if (defaultLevel === 0 && sharedPlayers.length === 0) return null;
+
+  // Annotate when visibility came from a folder or journal page rather
+  // than the document's own ownership.
+  const directShare = (own.default ?? 0) > 0 || playerIds.some(id => (own[id] ?? 0) > 0);
+  const via = [
+    !directShare && folderGrants(doc, playerIds) ? "folder" : null,
+    !directShare && hasPageGrant                          ? "page"   : null,
+  ].filter(Boolean);
 
   return {
     id:           doc.id,
@@ -84,6 +162,7 @@ function buildRow(doc, nonGmPlayers) {
     defaultLevel: defaultLevel > 0 ? levelLabel(defaultLevel) : null,
     defaultSlug:  levelSlug(defaultLevel),
     players:      sharedPlayers,
+    via:          via.length ? via.join(" + ") : null,
     document:     doc,
   };
 }
